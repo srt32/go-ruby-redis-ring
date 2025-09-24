@@ -1,0 +1,9 @@
+version: '3.9'
+
+services:
+  experiment:
+    build: .
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    command: ["bash", "experiments/run_experiment.sh"]
