@@ -1,14 +1,42 @@
-# Porting Redis::HashRing from Ruby to Go without losing a single byte
+# We Ported Redis::HashRing to Go and Matched Every Key
 
-*Engineering Enablement Team — 2024-05-30*
+Your Go migration is bleeding cache hits because go-redis' ring is *not* the
+same as Ruby's. This repo shows how we proved it, rebuilt the algorithm, and
+walked away with byte-for-byte shard compatibility.
 
-This repository demonstrates how to port the
-[`Redis::HashRing`](https://github.com/redis/redis-rb/blob/master/lib/redis/hash_ring.rb)
-algorithm to Go while keeping every shard assignment identical. A reproducible
-experiment harness shows the mismatch between go-redis' built-in ring and
-Ruby's implementation, then proves the custom Go port reaches 100% parity.
+## TL;DR
 
-## Overview
+- go-redis' rendezvous hashing diverges from Ruby's
+  [`Redis::HashRing`](https://github.com/redis/redis-rb/blob/master/lib/redis/hash_ring.rb)
+  even before hash tags enter the chat.
+- We captured real assignments from Ruby, compared them to Go, and instrumented
+  the mismatch so you can replay the pain yourself.
+- A custom Go implementation plugs into `go-redis` and hits **100% parity** with
+  Ruby, preserving every shard assignment.
+
+## Why this matters
+
+When we replaced a Ruby service with a Go rewrite we assumed that swapping the
+Redis client would be easy. Both the Ruby
+[`redis` gem](https://github.com/redis/redis-rb) and
+[`go-redis`](https://github.com/redis/go-redis) advertise "ring" clients for
+consistent hashing, so how different could they be? It turns out the algorithms
+are wildly incompatible. Keys that once lived on shard **A** suddenly landed on
+shard **C**, cache hit rates plummeted, and the migration ground to a halt. This
+repository documents the journey to a byte-for-byte compatible Go
+implementation of `Redis::HashRing`. We'll unpack the algorithmic differences,
+prove the mismatch with a reproducible experiment, and then rebuild the Ruby
+ring semantics on top of go-redis clients.
+
+## What's inside
+
+- A deterministic key generator (with and without Redis hash tags).
+- Ruby scripts that capture the ground-truth shard layout.
+- Go binaries that run the default ring, a go-redis consistent hash override,
+  and the final Ruby-compatible port.
+- Comparison tooling that emits JSON so you can diff every assignment.
+
+## How the experiment works
 
 Running the experiment performs the following steps:
 
@@ -125,19 +153,6 @@ about the algorithms so they can be consumed by other tooling.
   network calls are executed.
 
 ---
-
-When we replaced a Ruby service with a Go rewrite we assumed that swapping the
-Redis client would be easy. Both the Ruby
-[`redis` gem](https://github.com/redis/redis-rb) and
-[`go-redis`](https://github.com/redis/go-redis) advertise "ring" clients for
-consistent hashing, so how different could they be? It turns out the algorithms
-are wildly incompatible. Keys that once lived on shard **A** suddenly landed on
-shard **C**, cache hit rates plummeted, and the migration ground to a halt.
-
-This post documents the journey to a byte-for-byte compatible Go
-implementation of `Redis::HashRing`. We'll unpack the algorithmic differences,
-prove the mismatch with a reproducible experiment, and then rebuild the Ruby
-ring semantics on top of go-redis clients.
 
 ## Hash rings 101
 
