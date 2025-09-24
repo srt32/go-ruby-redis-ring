@@ -49,40 +49,104 @@ Change any detail and you end up on a different shard.
 
 ## Ruby's contract, in code
 
-Ruby's `Redis::HashRing` encodes those choices explicitly. Each server is
-replicated 160 times using `Digest::MD5`, and key lookups use `Zlib.crc32` with a
-wrap-around binary search. The heart of the algorithm looks like this:
+Ruby's `Redis::HashRing` encodes those choices explicitly. The implementation
+below is lifted verbatim from the
+[`redis-rb` source](https://github.com/redis/redis-rb/blob/master/lib/redis/hash_ring.rb)
+so you can compare our Go version against the real thing:
 
 ```ruby
-POINTS_PER_SERVER = 160
+# frozen_string_literal: true
 
-class RubyRing
-  def initialize(servers)
-    @ring = {}
-    @sorted_points = []
+require 'zlib'
+require 'digest/md5'
 
-    servers.each do |server|
-      POINTS_PER_SERVER.times do |replica|
-        key = "#{server}:#{replica}"
-        point = Digest::MD5.digest(key).byteslice(0, 4).unpack1('N')
-        @ring[point] = server
-        @sorted_points << point
+class Redis
+  class HashRing
+    POINTS_PER_SERVER = 160 # this is the default in libmemcached
+
+    attr_reader :ring, :sorted_keys, :replicas, :nodes
+
+    # nodes is a list of objects that have a proper to_s representation.
+    # replicas indicates how many virtual points should be used pr. node,
+    # replicas are required to improve the distribution.
+    def initialize(nodes = [], replicas = POINTS_PER_SERVER)
+      @replicas = replicas
+      @ring = {}
+      @nodes = []
+      @sorted_keys = []
+      nodes.each do |node|
+        add_node(node)
       end
     end
 
-    @sorted_points.sort!
-  end
+    # Adds a `node` to the hash ring (including a number of replicas).
+    def add_node(node)
+      @nodes << node
+      @replicas.times do |i|
+        key = server_hash_for("#{node.id}:#{i}")
+        @ring[key] = node
+        @sorted_keys << key
+      end
+      @sorted_keys.sort!
+    end
 
-  def node_for(key)
-    hash = Zlib.crc32(key)
-    index = @sorted_points.bsearch_index { |point| point >= hash }
-    index ||= 0 # wrap around to the first point
-    @ring[@sorted_points[index]]
+    def remove_node(node)
+      @nodes.reject! { |n| n.id == node.id }
+      @replicas.times do |i|
+        key = server_hash_for("#{node.id}:#{i}")
+        @ring.delete(key)
+        @sorted_keys.reject! { |k| k == key }
+      end
+    end
+
+    # get the node in the hash ring for this key
+    def get_node(key)
+      hash = hash_for(key)
+      idx = binary_search(@sorted_keys, hash)
+      @ring[@sorted_keys[idx]]
+    end
+
+    def iter_nodes(key)
+      return [nil, nil] if @ring.empty?
+
+      crc = hash_for(key)
+      pos = binary_search(@sorted_keys, crc)
+      @ring.size.times do |n|
+        yield @ring[@sorted_keys[(pos + n) % @ring.size]]
+      end
+    end
+
+    private
+
+    def hash_for(key)
+      Zlib.crc32(key)
+    end
+
+    def server_hash_for(key)
+      Digest::MD5.digest(key).unpack1("L>")
+    end
+
+    # Find the closest index in HashRing with value <= the given value
+    def binary_search(ary, value)
+      upper = ary.size
+      lower = 0
+
+      while lower < upper
+        mid = (lower + upper) / 2
+        if ary[mid] > value
+          upper = mid
+        else
+          lower = mid + 1
+        end
+      end
+
+      upper - 1
+    end
   end
 end
 ```
 
-That pairing (MD5 for servers, CRC32 for keys, specific string formatting for
+The pairing (MD5 for servers, CRC32 for keys, specific string formatting for
 virtual nodes, and the wrap-around binary search) is what we have to clone in
 Go.
 
@@ -92,20 +156,43 @@ Go-redis made very different choices. Its default ring prefers rendezvous
 hashing with `xxhash64`, normalizes keys using Redis hash tags, and exposes an
 API that returns a single node without any concept of "try the next shard":
 
-```go
-shards := []string{"cache-a", "cache-b", "cache-c"}
-ring := rendezvous.New(shards, xxhash.Sum64String)
+The default go-redis implementation makes different decisions. These excerpts
+come directly from
+[`ring.go`](https://github.com/redis/go-redis/blob/master/ring.go) and the
+[`hashtag`](https://github.com/redis/go-redis/blob/master/internal/hashtag/hashtag.go)
+package:
 
-for _, key := range keys {
-    shard := ring.Lookup(key)
-    fmt.Printf("%s -> %s\n", key, shard)
+```go
+type ConsistentHash interface {
+        Get(string) string
+}
+
+type rendezvousWrapper struct {
+        *rendezvous.Rendezvous
+}
+
+func (w rendezvousWrapper) Get(key string) string {
+        return w.Lookup(key)
+}
+
+func newRendezvous(shards []string) ConsistentHash {
+        return rendezvousWrapper{rendezvous.New(shards, xxhash.Sum64String)}
+}
+
+func Key(key string) string {
+        if s := strings.IndexByte(key, '{'); s > -1 {
+                if e := strings.IndexByte(key[s+1:], '}'); e > 0 {
+                        return key[s+1 : s+e+1]
+                }
+        }
+        return key
 }
 ```
 
-Even if you swapped in a CRC32 function, you would still hash only the key, not
-the servers, and you would still lose the ability to walk the ring in order.
-The contract is different, so a byte-for-byte migration is impossible without
-re-implementing the Ruby semantics.
+Even if you swapped in a CRC32 function, you would still hash only the normalized
+key and lose the ability to iterate around the ring. The contract is different,
+so a byte-for-byte migration is impossible without re-implementing the Ruby
+semantics.
 
 ## Building a reproducible experiment harness
 
