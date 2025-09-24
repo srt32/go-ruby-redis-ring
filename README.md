@@ -1,4 +1,4 @@
-# Porting Redis::HashRing to Go and Matched Every Key
+# Porting Redis::HashRing to Go and Matching Every Key
 
 Your Go migration is bleeding cache hits because go-redis' ring is *not* the
 same as Ruby's. This repo shows how we proved it, rebuilt the algorithm, and
