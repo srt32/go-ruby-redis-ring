@@ -321,6 +321,19 @@ makes the mismatch obvious:
 Barely 28.5% of the keys line up. Even with complete control over the hash
 function, the different preprocessing step prevents byte-for-byte parity.
 
+#### Could callers pre-normalize keys?
+
+One idea is to normalize keys *before* they reach go-redis so that the
+extension point sees the same bytes that Ruby hashes. In practice that means
+teaching every call site to run the inverse of `hashtag.Key` and pass the
+expanded form to `ring.Process`, hoping that go-redis' second normalization pass
+becomes a no-op. Unfortunately the library calls `hashtag.Key` deep inside the
+command routing path right before it invokes `ConsistentHash.Get`, so whatever
+string you pass from userland will be normalized again. Unless you want to fork
+the client or rewrite every Redis command to look up shards manually, there is
+no spot to sneak the original key through. The extension point simply never
+receives the raw Ruby key, so pre-normalizing at the edge cannot close the gap.
+
 #### What if you ignore hash tags?
 
 If your workload never leans on Redis hash tags you can regenerate the dataset
