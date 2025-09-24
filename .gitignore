@@ -1,0 +1,8 @@
+# Local dependencies
+.bundle/
+
+# Experiment outputs
+artifacts/*.json
+
+# Docker build leftovers
+*.log
