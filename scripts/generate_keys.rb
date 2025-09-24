@@ -6,7 +6,7 @@ require 'optparse'
 require 'time'
 
 options = {
-  count: 200,
+  count: 10_000,
   output: 'artifacts/keys.json',
   seed: 1337,
   prefix: 'user',

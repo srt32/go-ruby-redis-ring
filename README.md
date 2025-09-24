@@ -58,7 +58,7 @@ After the run completes you can inspect the results with standard tools:
 cat artifacts/comparison_default.json | jq '.match_rate'
 ```
 
-Expect to see `0.315` for the rendezvous baseline, `0.285` for the go-redis
+Expect to see `0.3332` for the rendezvous baseline, `0.9731` for the go-redis
 consistent hash override when hash tags are present, and `1.0` for the
 Ruby-compatible port. The script also emits a second comparison file that
 disables hash tags entirely to answer whether the override can ever reach
@@ -305,7 +305,7 @@ semantics.
 To make the mismatch concrete we built a tiny experiment harness. The workflow is
 implemented in [`experiments/run_experiment.sh`](experiments/run_experiment.sh):
 
-1. Generate 200 deterministic keys (seeded RNG, predictable prefix). Every
+1. Generate 10,000 deterministic keys (seeded RNG, predictable prefix). Every
    twenty-fifth key uses a Redis hash tag (for example `user:{tag25}:...`) so we
    can observe how go-redis preprocesses them.
 2. Assign each key to a shard using Ruby's `Redis::HashRing`.
@@ -363,14 +363,14 @@ When we compare this file to the Ruby baseline the mismatch is severe:
 
 ```json
 {
-  "total_keys": 200,
-  "matches": 63,
-  "mismatches": 137,
-  "match_rate": 0.315
+  "total_keys": 10000,
+  "matches": 3332,
+  "mismatches": 6668,
+  "match_rate": 0.3332
 }
 ```
 
-Only 31.5% of the keys land on the same shard. The rest hop elsewhere because
+Only 33.32% of the keys land on the same shard. The rest hop elsewhere because
 the rendezvous algorithm optimizes for different criteria.
 
 ### Trying go-redis' `ConsistentHash` override
@@ -417,15 +417,17 @@ makes the mismatch obvious:
 
 ```json
 {
-  "total_keys": 200,
-  "matches": 57,
-  "mismatches": 143,
-  "match_rate": 0.285
+  "total_keys": 10000,
+  "matches": 9731,
+  "mismatches": 269,
+  "match_rate": 0.9731
 }
 ```
 
-Barely 28.5% of the keys line up. Even with complete control over the hash
-function, the different preprocessing step prevents byte-for-byte parity.
+Roughly 97.31% of the keys line up. The remaining 269 mismatches map exactly to
+the keys where go-redis strips the hash tag before hashing, so even with complete
+control over the hash function the preprocessing step prevents byte-for-byte
+parity.
 
 #### Could callers pre-normalize keys?
 
@@ -449,8 +451,8 @@ bytes that Ruby hashes. The follow-up comparison shows a perfect match:
 
 ```json
 {
-  "total_keys": 200,
-  "matches": 200,
+  "total_keys": 10000,
+  "matches": 10000,
   "mismatches": 0,
   "match_rate": 1.0
 }
@@ -548,8 +550,8 @@ Running the comparison again tells the story:
 
 ```json
 {
-  "total_keys": 200,
-  "matches": 200,
+  "total_keys": 10000,
+  "matches": 10000,
   "mismatches": 0,
   "match_rate": 1.0
 }
