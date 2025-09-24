@@ -105,37 +105,6 @@ The script installs the Ruby gem dependencies into `.bundle/`, runs the three Go
 programs, and produces comparison JSON files in `artifacts/`. Use the same `jq`
 commands shown above to confirm the match rates locally.
 
-## Outputs
-
-The following JSON files are produced after a successful run:
-
-- `artifacts/keys.json` – the deterministic key set used for every language.
-- `artifacts/ruby_assignments.json` – shard choices from the Ruby hash ring.
-- `artifacts/go_default_assignments.json` – shard choices from the default
-  go-redis rendezvous ring.
-- `artifacts/go_consistent_assignments.json` – shard choices from the go-redis
-  ring when we swap in a `ConsistentHash` implementation that mimics
-  `Redis::HashRing` but still receives hash-tag-normalized keys.
-- `artifacts/go_custom_assignments.json` – shard choices from the Go
-  Ruby-compatible implementation.
-- `artifacts/comparison_default.json` – summary statistics comparing Ruby to the
-  default go-redis ring.
-- `artifacts/comparison_consistent.json` – summary statistics comparing Ruby to
-  the go-redis consistent hash override.
-- `artifacts/comparison_custom.json` – summary statistics comparing Ruby to the
-  custom Go implementation.
-- `artifacts/keys_no_hashtags.json` – the deterministic key set regenerated
-  without Redis hash tags for the follow-up experiment.
-- `artifacts/ruby_assignments_no_hashtags.json` – Ruby shard choices for the
-  no-hash-tag key set.
-- `artifacts/go_consistent_assignments_no_hashtags.json` – go-redis override
-  results for the no-hash-tag key set.
-- `artifacts/comparison_consistent_no_hashtags.json` – comparison proving the
-  override reaches 100% parity once key normalization becomes a no-op.
-
-The comparison JSON files include match counts, mismatch examples, and metadata
-about the algorithms so they can be consumed by other tooling.
-
 ## Assumptions
 
 - The generated dataset intentionally includes a few keys with Redis hash tags
