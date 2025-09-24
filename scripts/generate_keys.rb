@@ -9,7 +9,8 @@ options = {
   count: 200,
   output: 'artifacts/keys.json',
   seed: 1337,
-  prefix: 'user'
+  prefix: 'user',
+  hashtags: true
 }
 
 OptionParser.new do |opts|
@@ -30,13 +31,17 @@ OptionParser.new do |opts|
   opts.on('--prefix PREFIX', String, 'String prepended to each key') do |value|
     options[:prefix] = value
   end
+
+  opts.on('--no-hashtags', 'Disable Redis hash tag injection') do
+    options[:hashtags] = false
+  end
 end.parse!
 
 rng = Random.new(options[:seed])
 keys = Array.new(options[:count]) do |i|
   token = rng.bytes(8).unpack1('H*')
 
-  if (i % 25).zero?
+  if options[:hashtags] && (i % 25).zero?
     tag = "tag#{i}"
     "#{options[:prefix]}:{#{tag}}:#{token}"
   else
@@ -49,7 +54,8 @@ payload = {
     generated_at: Time.now.utc.iso8601,
     seed: options[:seed],
     count: options[:count],
-    prefix: options[:prefix]
+    prefix: options[:prefix],
+    hashtags: options[:hashtags]
   },
   keys: keys
 }

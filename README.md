@@ -51,7 +51,10 @@ cat artifacts/comparison_default.json | jq '.match_rate'
 ```
 
 Expect to see `0.315` for the rendezvous baseline, `0.285` for the go-redis
-consistent hash override, and `1.0` for the Ruby-compatible port.
+consistent hash override when hash tags are present, and `1.0` for the
+Ruby-compatible port. The script also emits a second comparison file that
+disables hash tags entirely to answer whether the override can ever reach
+parity—it hits `1.0` once the keys skip braces.
 
 ### Running locally without Docker
 
@@ -85,6 +88,14 @@ The following JSON files are produced after a successful run:
   the go-redis consistent hash override.
 - `artifacts/comparison_custom.json` – summary statistics comparing Ruby to the
   custom Go implementation.
+- `artifacts/keys_no_hashtags.json` – the deterministic key set regenerated
+  without Redis hash tags for the follow-up experiment.
+- `artifacts/ruby_assignments_no_hashtags.json` – Ruby shard choices for the
+  no-hash-tag key set.
+- `artifacts/go_consistent_assignments_no_hashtags.json` – go-redis override
+  results for the no-hash-tag key set.
+- `artifacts/comparison_consistent_no_hashtags.json` – comparison proving the
+  override reaches 100% parity once key normalization becomes a no-op.
 
 The comparison JSON files include match counts, mismatch examples, and metadata
 about the algorithms so they can be consumed by other tooling.
@@ -95,6 +106,9 @@ about the algorithms so they can be consumed by other tooling.
   (e.g. `user:{tag25}:...`) to demonstrate that go-redis always normalizes keys
   before hashing. Ruby's `HashRing` treats the braces as literal characters, so
   the go-redis override still diverges even when the hashing function matches.
+  If your application never relies on hash tags you can regenerate the dataset
+  with `--no-hashtags` and the override will line up with Ruby—but at the cost
+  of losing compatibility with existing tagged keys.
 - Each shard has equal weight. Ruby's hash ring supports weights by repeating
   nodes. The example uses three equally weighted shards to match the upstream
   redis-rb defaults.

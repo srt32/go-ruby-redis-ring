@@ -48,4 +48,25 @@ bundle exec ruby scripts/compare_results.rb \
   --candidate "$ARTIFACT_DIR/go_custom_assignments.json" \
   --output "$ARTIFACT_DIR/comparison_custom.json"
 
+echo "==> Generating deterministic key set without hash tags"
+bundle exec ruby scripts/generate_keys.rb \
+  --output "$ARTIFACT_DIR/keys_no_hashtags.json" \
+  --no-hashtags
+
+echo "==> Capturing ruby hash ring assignments (no hash tags)"
+bundle exec ruby scripts/ruby_ring.rb \
+  --keys "$ARTIFACT_DIR/keys_no_hashtags.json" \
+  --output "$ARTIFACT_DIR/ruby_assignments_no_hashtags.json"
+
+echo "==> Capturing go-redis consistent hash override assignments (no hash tags)"
+go run ./cmd/go-ring-consistenthash \
+  --keys "$ARTIFACT_DIR/keys_no_hashtags.json" \
+  --output "$ARTIFACT_DIR/go_consistent_assignments_no_hashtags.json"
+
+echo "==> Comparing ruby vs go consistent hash override (no hash tags)"
+bundle exec ruby scripts/compare_results.rb \
+  --baseline "$ARTIFACT_DIR/ruby_assignments_no_hashtags.json" \
+  --candidate "$ARTIFACT_DIR/go_consistent_assignments_no_hashtags.json" \
+  --output "$ARTIFACT_DIR/comparison_consistent_no_hashtags.json"
+
 echo "Artifacts written to $ARTIFACT_DIR"

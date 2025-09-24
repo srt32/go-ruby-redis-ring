@@ -51,15 +51,28 @@ func (h *rubyStyleHash) Get(key string) string {
 	}
 
 	hash := crc32.ChecksumIEEE([]byte(key))
-	idx := sort.Search(len(h.sortedKeys), func(i int) bool {
-		return h.sortedKeys[i] >= hash
-	})
-
-	if idx == len(h.sortedKeys) {
-		idx = 0
+	idx := binarySearch(h.sortedKeys, hash)
+	if idx < 0 {
+		idx = len(h.sortedKeys) - 1
 	}
 
 	return h.ring[h.sortedKeys[idx]]
+}
+
+func binarySearch(keys []uint32, value uint32) int {
+	lower := 0
+	upper := len(keys)
+
+	for lower < upper {
+		mid := (lower + upper) / 2
+		if keys[mid] > value {
+			upper = mid
+		} else {
+			lower = mid + 1
+		}
+	}
+
+	return upper - 1
 }
 
 func serverHashFor(key string) uint32 {

@@ -234,6 +234,27 @@ makes the mismatch obvious:
 Barely 28.5% of the keys line up. Even with complete control over the hash
 function, the different preprocessing step prevents byte-for-byte parity.
 
+#### What if you ignore hash tags?
+
+If your workload never leans on Redis hash tags you can regenerate the dataset
+with `scripts/generate_keys.rb --no-hashtags`. In that configuration go-redis no
+longer strips braces, so the custom `ConsistentHash` receives the exact same
+bytes that Ruby hashes. The follow-up comparison shows a perfect match:
+
+```json
+{
+  "total_keys": 200,
+  "matches": 200,
+  "mismatches": 0,
+  "match_rate": 1.0
+}
+```
+
+This is the one scenario where the extension point is viable. The catch is that
+most production Ruby clients already depend on hash tags for multi-key
+operations, so abandoning them would break real traffic. When compatibility with
+those keys matters, the override still falls short.
+
 ### Re-implementing the Ruby algorithm in Go
 
 The compatible Go implementation lives in
