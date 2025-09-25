@@ -6,3 +6,7 @@ artifacts/*.json
 
 # Docker build leftovers
 *.log
+
+# Build artifacts
+go-ring-*
+*.exe
