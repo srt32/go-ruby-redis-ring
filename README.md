@@ -748,7 +748,7 @@ The example above uses key-based hashing to select replicas consistently. You ca
 
 ```go
 // Random replica selection (better load distribution)
-// Note: Initialize rand.Seed() appropriately in production
+// Note: Consider using rand.New() with crypto/rand seed for production use
 func (r *rubyHashRing) getRandomReplicaClient(key string) *redis.Client {
     node := r.getNode(key)
     if node == nil || len(node.replicas) == 0 {
@@ -778,6 +778,7 @@ func (r *rubyHashRing) getHealthyReplicaClient(key string) *redis.Client {
 
 // Example health check implementation
 func isHealthy(client *redis.Client) bool {
+    // Short timeout to quickly detect unhealthy replicas
     ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
     defer cancel()
     
