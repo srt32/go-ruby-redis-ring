@@ -625,7 +625,7 @@ func newRubyHashRingWithReplicas(configs []shardConfig, replicas int) *rubyHashR
         for _, replicaAddr := range cfg.ReplicaAddrs {
             n.replicas = append(n.replicas, redis.NewClient(&redis.Options{
                 Addr:     replicaAddr,
-                ReadOnly: true, // Ensure replica connections are read-only
+                ReadOnly: true, // Client-side protection against write commands
             }))
         }
         
@@ -690,7 +690,7 @@ func (r *rubyHashRing) getClientForWrite(key string) *redis.Client {
 
 ### Usage patterns
 
-Configure your ring with primary and replica addresses:
+Configure your ring with primary and replica addresses. Note that the Redis servers should be properly configured with primary-replica replication, and replica servers should have `replica-read-only yes` in their configuration:
 
 ```go
 shardDefs := []shardConfig{
@@ -748,6 +748,7 @@ The example above uses key-based hashing to select replicas consistently. You ca
 
 ```go
 // Random replica selection (better load distribution)
+// Note: Initialize rand.Seed() appropriately in production
 func (r *rubyHashRing) getRandomReplicaClient(key string) *redis.Client {
     node := r.getNode(key)
     if node == nil || len(node.replicas) == 0 {
@@ -773,6 +774,15 @@ func (r *rubyHashRing) getHealthyReplicaClient(key string) *redis.Client {
     }
     
     return node.primary // Fallback to primary
+}
+
+// Example health check implementation
+func isHealthy(client *redis.Client) bool {
+    ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+    defer cancel()
+    
+    // Use PING command to check if replica is responsive
+    return client.Ping(ctx).Err() == nil
 }
 ```
 
