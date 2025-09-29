@@ -582,6 +582,18 @@ is that shard selection happens in your code instead of the library. Because the
 hashing logic matches Ruby's byte-for-byte, you can deploy the Go service next
 to the Ruby one, shadow traffic, and confirm the chosen shards stay in lockstep.
 
+## Supporting read replicas alongside primaries
+
+For production deployments that need to distribute read traffic across Redis replicas while maintaining Ruby compatibility, see the dedicated guide:
+
+**[📖 Redis Replicas Guide](docs/redis-replicas.md)**
+
+This guide covers:
+- Extending the hash ring to support primary/replica configurations
+- Read/write client selection strategies
+- Health checking and failover patterns
+- Maintaining Ruby compatibility while leveraging replicas
+
 ## What to explore next
 
 With shard parity solved you can:
@@ -590,6 +602,7 @@ With shard parity solved you can:
   Ruby's implementation.
 - Layer health checks on top of the ring and fall back to the next shard when a
   Redis node is unavailable.
+- Implement the read replica pattern described above for better read performance.
 - Experiment with other consistent hashing algorithms now that you have a
   reproducible test harness.
 
